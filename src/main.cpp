@@ -33,11 +33,7 @@ public:
 		REL::Relocation<std::uintptr_t> CanActorBeReanimated{ REL::ID(33825) };
 
 		auto& trampoline = SKSE::GetTrampoline();
-		if (patchHorse && decapitateCheck) {
-			_IsLimbGone = trampoline.write_call<5>(CanActorBeReanimated.address() + 0x72, IsLimbGone_DecapHorse);
-		} else {
-			_IsLimbGone = trampoline.write_call<5>(CanActorBeReanimated.address() + 0x72, patchHorse ? IsLimbGone_Horse : IsLimbGone);
-		}
+		_IsLimbGone = trampoline.write_call<5>(CanActorBeReanimated.address() + 0x72, IsLimbGone);
 	}
 
 private:
@@ -45,23 +41,6 @@ private:
 	{
 		return false;
 	}
-
-	static bool IsLimbGone_Horse(RE::Actor* a_actor, std::uint32_t a_limbEnum)	//reimplements HasKeyword MagicNoReanimate condition check here.
-	{
-		if (a_actor->HasKeyword("MagicNoReanimate"sv) && !a_actor->HasKeyword("ActorTypeHorse"sv)) {
-			return true;
-		}
-		return _IsLimbGone(a_actor, a_limbEnum);
-	}
-
-	static bool IsLimbGone_DecapHorse(RE::Actor* a_actor, std::uint32_t a_limbEnum)
-	{
-		if (a_actor->HasKeyword("MagicNoReanimate"sv) && !a_actor->HasKeyword("ActorTypeHorse"sv)) {
-			return true;
-		}
-		return false;
-	}
-
 	static inline REL::Relocation<decltype(IsLimbGone)> _IsLimbGone;
 };
 
@@ -88,8 +67,8 @@ private:
 				auto actorPtr = followers.actor.get();
 				auto actor = actorPtr.get();
 				if (actor && actor->GetLifeState() == RE::ACTOR_LIFE_STATE::kReanimate && !actor->IsAMount()) {
-					auto distance = RE::NiPoint3::GetSquaredDistance(a_player->GetPosition(), actor->GetPosition());
-					if (distance > (400.0f * 400.0f)) {
+					auto distance = a_player->GetPosition().GetSquaredDistance(actor->GetPosition());
+					if (distance > followDistSquared) {
 						actor->MoveTo(a_player);
 					}
 				}
@@ -97,29 +76,28 @@ private:
 		}
 	}
 	static inline REL::Relocation<decltype(ClearPlayerCombatGroup)> _ClearPlayerCombatGroup;
+
+	static inline float followDistSquared = 160000.0f;
 };
 
 
 class RideHorse
 {
 public:
-	static void PatchActivate()	 // patch out TESNPC::Activate check that returns if the actor is reanimated
+	static void PatchActivate()	 // patch out TESNPC::Activate return if the actor is reanimated
 	{
-		struct Patch : Xbyak::CodeGenerator
-		{
-			Patch()
-			{
-				// cmp(edx, 4)
-
-				cmp(edx, 9);  // non existent life state
-			}
-		};
-
-		Patch patch;
-		patch.ready();
-
 		REL::Relocation<std::uintptr_t> Activate{ REL::ID(24211) };
-		REL::safe_write(Activate.address() + 0x362, stl::span{ patch.getCode(), patch.getSize() });
+
+		constexpr uintptr_t START = 0x362;
+		constexpr uintptr_t END = 0x36B;
+		constexpr std::uint8_t NOP = 0x90;
+
+		//.text : 0000000140360F72 cmp edx, 4
+		//.text : 0000000140360F75 jz loc_14036161D
+
+		for (uintptr_t i = START; i < END; ++i) {
+			REL::safe_write(Activate.address() + i, NOP);
+		}
 	}
 
 
@@ -169,99 +147,58 @@ private:
 };
 
 
-class PatchHorse
-{
-public:
-	static void deleteReanimateNode(RE::TESConditionItem** a_head)
-	{
-		auto reanimateKYWD = RE::TESForm::LookupByID<RE::BGSKeyword>(0x0006F6FB);
-		if (!reanimateKYWD) {
-			return;
-		}
-
-		auto temp = *a_head;
-		RE::TESConditionItem* prev = nullptr;
-
-		if (temp && isReanimatedCondition(temp, reanimateKYWD)) {
-			*a_head = temp->next;
-			delete temp;
-			return;
-		}
-		while (temp && !isReanimatedCondition(temp, reanimateKYWD)) {
-			prev = temp;
-			temp = temp->next;
-		}
-		if (!temp) {
-			return;
-		}
-
-		prev->next = temp->next;
-		delete temp;
-	}
-
-private:
-	static bool isReanimatedCondition(RE::TESConditionItem* node, RE::BGSKeyword* reanimateKeyword)
-	{
-		using ID = RE::FUNCTION_DATA::FunctionID;
-
-		return node->data.functionData.function == ID::kHasKeyword && node->data.functionData.params[0] == reanimateKeyword;
-	}
-};
-
-
+//new method for patching horses, by swapping unused keyword in place of MagicNoReanimate. RemoveKeyword caused crashes (numKeywords wasn't decremented?)
 void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
-	switch (a_msg->type) {
-	case SKSE::MessagingInterface::kDataLoaded:
+	if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
 		if (rideHorse && patchHorse) {
-			auto dataHandler = RE::TESDataHandler::GetSingleton();
-			if (dataHandler) {
-				for (const auto& effect : dataHandler->GetFormArray<RE::EffectSetting>()) {
-					if (effect && effect->GetArchetype() == RE::Archetype::kReanimate) {
-						PatchHorse::deleteReanimateNode(&effect->conditions.head);	//delete condition so I can reimplement it myself
+			const auto reanimateKYWD = RE::TESForm::LookupByID<RE::BGSKeyword>(0x0006F6FB);
+			const auto traitGreedy = RE::TESForm::LookupByID<RE::BGSKeyword>(0x000335FA);  //unused keyword in vanilla game.
+			if (!reanimateKYWD || !traitGreedy) {
+				return;
+			}
+
+			if (auto dataHandler = RE::TESDataHandler::GetSingleton(); dataHandler) {
+				for (const auto& race : dataHandler->GetFormArray<RE::TESRace>()) {
+					if (race && race->HasKeywordString("MagicNoReanimate"sv)) {
+						std::string name{ race->GetName() };
+						if (SKSE::STRING::insenstiveStringFind(name, "horse"sv)) {
+							race->SwapKeyword(reanimateKYWD, traitGreedy);
+						}
 					}
 				}
 			}
 		}
-		break;
 	}
 }
 
 
-bool ReadINI()
+void LoadSettings()
 {
-	try {
-		static std::string pluginPath;
-		if (pluginPath.empty()) {
-			pluginPath = SKSE::GetPluginConfigPath("po3_EnhancedReanimation");
-		}
+	constexpr auto path = L"Data/SKSE/Plugins/po3_EnhancedReanimation.ini";
 
-		CSimpleIniA ini;
-		ini.SetUnicode();
-		ini.SetMultiKey();
+	CSimpleIniA ini;
+	ini.SetUnicode();
+	ini.SetMultiKey();
 
-		SI_Error rc = ini.LoadFile(pluginPath.c_str());
-		if (rc < 0) {
-			logger::error("Can't load 'po3_EnhancedReanimation.ini'");
-			return false;
-		}
+	ini.LoadFile(path);
 
-		decapitateCheck = ini.GetBoolValue("Settings", "Decapitated NPCs", true);
+	fastTravel = ini.GetBoolValue("Settings", "Fast Travel", true);
+	ini.SetBoolValue("Settings", "Fast Travel", fastTravel, ";fast travel fix", true);
 
-		fastTravel = ini.GetBoolValue("Settings", "Fast Travel", true);
+	npcCombat = ini.GetBoolValue("Settings", "Necromancer Cast", true);
+	ini.SetBoolValue("Settings", "Necromancer Cast", npcCombat, ";reanimated necromancers can cast reanimate spells", true);
 
-		npcCombat = ini.GetBoolValue("Settings", "Necromancer Cast", true);
+	decapitateCheck = ini.GetBoolValue("Settings", "Decapitated NPCs", true);
+	ini.SetBoolValue("Settings", "Decapitated NPCs", decapitateCheck, ";reanimate decapitated enemies", true);
 
-		rideHorse = ini.GetBoolValue("Riding", "Ride Horses", true);
+	rideHorse = ini.GetBoolValue("Riding", "Ride Horses", true);
+	ini.SetBoolValue("Riding", "Ride Horses", rideHorse, ";ride reanimated horses/mounts (not dragons)", true);
 
-		patchHorse = ini.GetBoolValue("Riding", "Patch Horses", true);
+	patchHorse = ini.GetBoolValue("Riding", "Patch Horses", true);
+	ini.SetBoolValue("Riding", "Patch Horses", patchHorse, ";patch all reanimate spells so mounts can be reanimated", true);
 
-	} catch (...) {
-		logger::error("Can't read 'po3_EnhancedReanimation.ini'");
-		return false;
-	}
-
-	return true;
+	ini.SaveFile(path);
 }
 
 
@@ -316,17 +253,17 @@ extern "C" DLLEXPORT bool APIENTRY SKSEPlugin_Load(const SKSE::LoadInterface* a_
 		logger::info("Enhanced Reanimation loaded");
 
 		SKSE::Init(a_skse);
-		SKSE::AllocTrampoline(1 << 6);
+		SKSE::AllocTrampoline(43);
 
-		ReadINI();
+		LoadSettings();
 
 		auto messaging = SKSE::GetMessagingInterface();
 		if (!messaging->RegisterListener("SKSE", OnInit)) {
 			return false;
 		}
 
-		if (decapitateCheck || (rideHorse && patchHorse)) {
-			logger::info("patching reanimated check");
+		if (decapitateCheck) {
+			logger::info("patching decapitate check");
 			ReanimateCheck::Patch();
 		}
 		if (npcCombat) {
