@@ -1,0 +1,14 @@
+{
+  "name": "enhanced-reanimation",
+  "version-string": "1.4.0",
+  "description": "Enhanced Reanimation",
+  "homepage": "",
+  "license": "MIT",
+  "dependencies": [
+    "boost-stl-interfaces",
+    "rsm-binary-io",
+    "simpleini",
+    "spdlog",
+    "xbyak"
+  ]
+}
