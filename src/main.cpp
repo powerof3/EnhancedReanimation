@@ -5,10 +5,10 @@ namespace NPCCombatCast
 	void Patch()
 	{
 		//CombatMagicCasterReanimate::CheckShouldEquip
-		REL::Relocation<std::uintptr_t> target{ REL::ID(44036) };
+		REL::Relocation<std::uintptr_t> target{ REL::ID(45432) };
 
 		constexpr std::array<std::uint8_t, 2> bytes{ REL::NOP, REL::NOP };
-		REL::safe_write(target.address() + 0xAF, std::span{ bytes.data(), bytes.size() });
+		REL::safe_write(target.address() + 0x8B, std::span{ bytes.data(), bytes.size() });
 	}
 };
 
@@ -26,7 +26,7 @@ namespace DecapitateCheck
 	void Patch()
 	{
 		//Actor::CanBeReanimated
-		REL::Relocation<std::uintptr_t> target{ REL::ID(33825) };
+		REL::Relocation<std::uintptr_t> target{ REL::ID(34617) };
 		stl::write_thunk_call<IsDismembered>(target.address() + 0x72);
 	}
 }
@@ -81,8 +81,8 @@ namespace Riding
 		void Patch()
 		{
 			//TESNPC::GetActivateText
-			REL::Relocation<std::uintptr_t> target{ REL::ID(24212) };
-			stl::write_thunk_call<IsHorse>(target.address() + 0x88);
+			REL::Relocation<std::uintptr_t> target{ REL::ID(24716) };
+			stl::write_thunk_call<IsHorse>(target.address() + 0x8A);
 		}
 	}
 
@@ -110,8 +110,8 @@ namespace Riding
 		void Patch()
 		{
 			//Reanimate::Start
-			REL::Relocation<std::uintptr_t> target{ REL::ID(33956) };
-			stl::write_thunk_call<CommandedEffect__Start>(target.address() + 0x22B);
+			REL::Relocation<std::uintptr_t> target{ REL::ID(34750) };
+			stl::write_thunk_call<CommandedEffect__Start>(target.address() + 0x24E);
 		}
 	}
 
@@ -133,7 +133,7 @@ namespace Riding
 				dummyKYWD->SetFormEditorID("DummyHorseReanimate");
 				dataHandler->GetFormArray<RE::BGSKeyword>().push_back(dummyKYWD);
 
-				for (const auto& race : dataHandler->GetFormArray<RE::TESRace>()) {
+				for (auto& race : dataHandler->GetFormArray<RE::TESRace>()) {
 					if (race) {
 						std::string name{ race->GetName() };
 						auto index = race->GetKeywordIndex(reanimateKYWD);
@@ -151,13 +151,13 @@ namespace Riding
 		void Patch()
 		{
 			//TESNPC::Activate
-			REL::Relocation<std::uintptr_t> target{ REL::ID(24211) };
+			REL::Relocation<std::uintptr_t> target{ REL::ID(24715) };
 
-			constexpr uintptr_t START = 0x362;
-			constexpr uintptr_t END = 0x36B;
+			constexpr uintptr_t START = 0x36E;
+			constexpr uintptr_t END = 0x37A;
 
-			//.text : 0000000140360F72 cmp edx, 4
-			//.text : 0000000140360F75 jz loc_14036161D
+			//.text: 0000000140377D6E cmp edx, 800000h
+			//.text: 0000000140377D74 jz loc_140377B3F
 
 			for (uintptr_t i = START; i < END; ++i) {
 				REL::safe_write(target.address() + i, REL::NOP);
@@ -170,22 +170,30 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
 	if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
 		Riding::RaceReanimateCheck::Patch();
+		FastTravel::ZombieEventHandler::GetSingleton()->Install();
 	}
 }
 
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
+extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
+	SKSE::PluginVersionData v;
+	v.PluginVersion(Version::MAJOR);
+	v.PluginName("Enhanced Reanimation");
+	v.AuthorName("powerofthree");
+	v.UsesAddressLibrary(true);
+	v.CompatibleVersions({ SKSE::RUNTIME_LATEST });
+
+	return v;
+}();
+
+void InitializeLog()
 {
-#ifndef NDEBUG
-	auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
-#else
 	auto path = logger::log_directory();
 	if (!path) {
-		return false;
+		stl::report_and_fail("Failed to find standard logging directory"sv);
 	}
 
 	*path /= fmt::format(FMT_STRING("{}.log"), Version::PROJECT);
 	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
-#endif
 
 	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
 
@@ -200,27 +208,12 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a
 	spdlog::set_pattern("[%H:%M:%S] %v"s);
 
 	logger::info(FMT_STRING("{} v{}"), Version::PROJECT, Version::NAME);
-
-	a_info->infoVersion = SKSE::PluginInfo::kVersion;
-	a_info->name = "Enhanced Reanimation";
-	a_info->version = Version::MAJOR;
-
-	if (a_skse->IsEditor()) {
-		logger::critical("Loaded in editor, marking as incompatible"sv);
-		return false;
-	}
-
-	const auto ver = a_skse->RuntimeVersion();
-	if (ver < SKSE::RUNTIME_1_5_39) {
-		logger::critical(FMT_STRING("Unsupported runtime version {}"), ver.string());
-		return false;
-	}
-
-	return true;
 }
 
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
+	InitializeLog();
+
 	logger::info("loaded plugin");
 
 	SKSE::Init(a_skse);
