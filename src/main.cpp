@@ -33,36 +33,66 @@ namespace DecapitateCheck
 
 namespace FastTravel
 {
-	struct ClearPlayerCombatGroup
+	class LocationChangeHandler final :
+		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 	{
-		static void thunk(RE::PlayerCharacter* a_player)
+	public:
+		[[nodiscard]] static LocationChangeHandler* GetSingleton()
 		{
-			func(a_player);
+			static LocationChangeHandler singleton;
+			return std::addressof(singleton);
+		}
 
-			const auto extraFollowers = a_player->extraList.GetByType<RE::ExtraFollower>();
-			if (extraFollowers) {
-				for (const auto& followers : extraFollowers->actorFollowers) {
-					auto actor = followers.actor.get();
-					if (actor && actor->GetLifeState() == RE::ACTOR_LIFE_STATE::kReanimate && !actor->IsAMount()) {
-						const auto distance = a_player->GetPosition().GetSquaredDistance(actor->GetPosition());
-						if (distance > followDistSquared) {
-							actor->MoveTo(a_player);
+		void Patch()
+		{
+			auto menuSrc = RE::UI::GetSingleton();
+			if (menuSrc) {
+				menuSrc->AddEventSink<RE::MenuOpenCloseEvent>(GetSingleton());
+			}
+		}
+
+	protected:
+		using EventResult = RE::BSEventNotifyControl;
+
+		EventResult ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
+		{
+			auto intfcStr = RE::InterfaceStrings::GetSingleton();
+			if (!intfcStr || !a_event || a_event->menuName != intfcStr->loadingMenu || a_event->opening) {
+				return EventResult::kContinue;
+			}
+
+			if (const auto player = RE::PlayerCharacter::GetSingleton(); player) {
+				const auto process = player->currentProcess;
+				const auto middleHigh = process ? process->middleHigh : nullptr;
+
+				if (middleHigh) {
+					for (auto& commandedActorData : middleHigh->commandedActors) {
+						const auto zombie = commandedActorData.commandedActor.get();
+						if (zombie && zombie->GetLifeState() == RE::ACTOR_LIFE_STATE::kReanimate && !zombie->IsAMount()) {
+							const auto distance = player->GetPosition().GetSquaredDistance(zombie->GetPosition());
+							if (distance > followDistSquared) {
+								zombie->MoveTo(player);
+							}
 						}
 					}
 				}
 			}
+
+			return EventResult::kContinue;
 		}
-		static inline REL::Relocation<decltype(&thunk)> func;
+
+	private:
+		LocationChangeHandler() = default;
+		LocationChangeHandler(const LocationChangeHandler&) = delete;
+		LocationChangeHandler(LocationChangeHandler&&) = delete;
+
+		~LocationChangeHandler() override = default;
+
+		LocationChangeHandler& operator=(const LocationChangeHandler&) = delete;
+		LocationChangeHandler& operator=(LocationChangeHandler&&) = delete;
 
 		static inline float followDistSquared = 160000.0f;
 	};
-
-	void Patch()
-	{
-		//FastTravel
-		REL::Relocation<std::uintptr_t> target{ REL::ID(39373) };
-		stl::write_thunk_call<ClearPlayerCombatGroup>(target.address() + 0xA4C);
-	}
 }
 
 namespace Riding
@@ -169,7 +199,13 @@ namespace Riding
 void OnInit(SKSE::MessagingInterface::Message* a_msg)
 {
 	if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
-		Riding::RaceReanimateCheck::Patch();
+		const auto settings = Settings::GetSingleton();
+		if (settings->patchHorse) {
+			Riding::RaceReanimateCheck::Patch();
+		}
+		if (settings->fastTravel) {
+			FastTravel::LocationChangeHandler::GetSingleton()->Patch();
+		}
 	}
 }
 
@@ -224,16 +260,13 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 	logger::info("loaded plugin");
 
 	SKSE::Init(a_skse);
-	SKSE::AllocTrampoline(43);
+	SKSE::AllocTrampoline(28);
 
 	const auto settings = Settings::GetSingleton();
 	settings->Load();
 
 	if (settings->decapitateCheck) {
 		DecapitateCheck::Patch();
-	}
-	if (settings->fastTravel) {
-		FastTravel::Patch();
 	}
 	if (settings->npcCombat) {
 		NPCCombatCast::Patch();
@@ -242,12 +275,10 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 		Riding::Patch();
 		Riding::Name::Patch();
 		Riding::StolenTag::Patch();
-
-		if (settings->patchHorse) {
-			auto messaging = SKSE::GetMessagingInterface();
-			messaging->RegisterListener("SKSE", OnInit);
-		}
 	}
+
+	auto messaging = SKSE::GetMessagingInterface();
+	messaging->RegisterListener("SKSE", OnInit);
 
 	return true;
 }
