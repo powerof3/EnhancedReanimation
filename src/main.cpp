@@ -43,14 +43,6 @@ namespace FastTravel
 			return std::addressof(singleton);
 		}
 
-		void Patch()
-		{
-			auto menuSrc = RE::UI::GetSingleton();
-			if (menuSrc) {
-				menuSrc->AddEventSink<RE::MenuOpenCloseEvent>(GetSingleton());
-			}
-		}
-
 	protected:
 		using EventResult = RE::BSEventNotifyControl;
 
@@ -93,6 +85,14 @@ namespace FastTravel
 
 		static inline float followDistSquared = 160000.0f;
 	};
+
+	void Patch()
+	{
+		auto menuSrc = RE::UI::GetSingleton();
+		if (menuSrc) {
+			menuSrc->AddEventSink(LocationChangeHandler::GetSingleton());
+		}
+	}
 }
 
 namespace Riding
@@ -204,7 +204,7 @@ void OnInit(SKSE::MessagingInterface::Message* a_msg)
 			Riding::RaceReanimateCheck::Patch();
 		}
 		if (settings->fastTravel) {
-			FastTravel::LocationChangeHandler::GetSingleton()->Patch();
+			FastTravel::Patch();
 		}
 	}
 }
