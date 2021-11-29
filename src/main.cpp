@@ -7,8 +7,17 @@ namespace NPCCombatCast
 		//CombatMagicCasterReanimate::CheckShouldEquip
 		REL::Relocation<std::uintptr_t> target{ REL::ID(44036) };
 
-		constexpr std::array<std::uint8_t, 2> bytes{ REL::NOP, REL::NOP };
-		REL::safe_write(target.address() + 0xAF, std::span{ bytes.data(), bytes.size() });
+		constexpr uintptr_t START = 0x9F;
+		constexpr uintptr_t END = 0xB1;
+
+		//.text: 000000014078601F mov eax, [rsi + 0C0h]
+		//.text: 0000000140786025 and eax, 1E00000h
+		//.text: 000000014078602A cmp eax, 800000h
+		//.text: 000000014078602F jz short loc_1407860A7
+
+		for (uintptr_t i = START; i < END; ++i) {
+			REL::safe_write(target.address() + i, REL::NOP);
+		}
 	}
 };
 
