@@ -36,7 +36,7 @@ namespace DecapitateCheck
 	{
 		//Actor::CanBeReanimated
 		REL::Relocation<std::uintptr_t> target{ REL::ID(33825) };
-		stl::write_thunk_call<IsDismembered>(target.address() + 0x72);
+		::stl::write_thunk_call<IsDismembered>(target.address() + 0x72);
 	}
 }
 
@@ -121,7 +121,7 @@ namespace Riding
 		{
 			//TESNPC::GetActivateText
 			REL::Relocation<std::uintptr_t> target{ REL::ID(24212) };
-			stl::write_thunk_call<IsHorse>(target.address() + 0x88);
+			::stl::write_thunk_call<IsHorse>(target.address() + 0x88);
 		}
 	}
 
@@ -150,7 +150,7 @@ namespace Riding
 		{
 			//Reanimate::Start
 			REL::Relocation<std::uintptr_t> target{ REL::ID(33956) };
-			stl::write_thunk_call<CommandedEffect__Start>(target.address() + 0x22B);
+			::stl::write_thunk_call<CommandedEffect__Start>(target.address() + 0x22B);
 		}
 	}
 
