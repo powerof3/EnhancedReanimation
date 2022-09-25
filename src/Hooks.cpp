@@ -147,7 +147,7 @@ namespace EnhancedReanimation
 					dataHandler->GetFormArray<RE::BGSKeyword>().push_back(dummyKYWD);
 
 					for (const auto& race : dataHandler->GetFormArray<RE::TESRace>()) {
-						if (race && race->HasKeywordString("ActorTypeHorse")) {
+						if (race && string::icontains(race->GetName(), "Horse")) {
 							if (auto index = race->GetKeywordIndex(reanimateKYWD)) {
 								race->keywords[*index] = dummyKYWD;
 							}
