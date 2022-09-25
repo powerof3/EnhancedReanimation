@@ -22,7 +22,7 @@ public:
 		detail::get_value(ini, npcCombat, "Settings", "Necromancer Cast", ";reanimated necromancers can cast reanimate spells");
 		detail::get_value(ini, decapitateCheck, "Settings", "Decapitated NPCs", ";reanimate decapitated enemies");
 		detail::get_value(ini, rideHorse, "Riding", "Ride Horses", ";ride reanimated horses/mounts (not dragons)");
-		detail::get_value(ini, decapitateCheck, "Riding", "Patch Horses", ";patch all reanimate spells so mounts can be reanimated");
+		detail::get_value(ini, patchHorse, "Riding", "Patch Horses", ";patch all reanimate spells so mounts can be reanimated");
 
 		ini.SaveFile(path);
 	}
