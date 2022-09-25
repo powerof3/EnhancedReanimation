@@ -181,14 +181,17 @@ namespace EnhancedReanimation
 
 		if (settings->decapitateCheck) {
 			DecapitateCheck::Install();
+			logger::info("Installed reanimate decapitated NPCs patch");
 		}
 		if (settings->npcCombat) {
 			NPCCombatCast::Install();
+			logger::info("Installed reanimated necromancer cast patch");
 		}
 		if (settings->rideHorse) {
 			Riding::Install();
 			Riding::Name::Install();
 			Riding::StolenTag::Install();
+			logger::info("Installed horse riding patch");
 		}
 	}
 
@@ -197,9 +200,12 @@ namespace EnhancedReanimation
 		const auto settings = Settings::GetSingleton();
 		if (settings->patchHorse) {
 			Riding::RaceReanimateCheck::Install();
+
+			logger::info("Installed horse reanimation patch");
 		}
 		if (settings->fastTravel) {
 			FastTravel::Register();
+			logger::info("Installed fast travel fix");
 		}
 	}
 }
