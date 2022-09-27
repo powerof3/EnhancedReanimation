@@ -13,6 +13,7 @@ jobs:
   run:
     uses: adya/pack-skse-mod/.github/workflows/pack.yml@main
     with:
+      AE_353_BRANCH: main-1.6.353
       FOMOD_MOD_NAME: "Enhanced Reanimation"
       FOMOD_MOD_AUTHOR: "powerofthree"
       FOMOD_MOD_NEXUS_ID: "43500"
