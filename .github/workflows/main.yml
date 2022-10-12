@@ -13,9 +13,10 @@ jobs:
   run:
     uses: adya/pack-skse-mod/.github/workflows/pack.yml@main
     with:
-      AE_353_BRANCH: main-1.6.353
+      AE_353_BRANCH: master-1.6.353
       FOMOD_INCLUDE_PDB: true
       FOMOD_MOD_NAME: "Enhanced Reanimation"
       FOMOD_MOD_AUTHOR: "powerofthree"
       FOMOD_MOD_NEXUS_ID: "43500"
+      FOMOD_REQUIRED_INSTALLATION_DIR: "Skyrim/Data"
       PUBLISH_ARCHIVE_TYPE: '7z'
