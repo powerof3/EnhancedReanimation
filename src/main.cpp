@@ -20,8 +20,7 @@ extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
 	v.PluginVersion(Version::MAJOR);
 	v.PluginName("Enhanced Reanimation");
 	v.AuthorName("powerofthree");
-	v.UsesAddressLibrary();
-	v.UsesUpdatedStructs();
+	v.UsesAddressLibrary(true);
 	v.CompatibleVersions({ SKSE::RUNTIME_LATEST });
 
 	return v;
